@@ -1,0 +1,50 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{D14420D6-AB0A-4DE0-87ED-231A8CF06E52}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KeyMate.Core", "src\KeyMate.Core\KeyMate.Core.csproj", "{90B7B758-2286-4072-BA00-9A28CCBA0D75}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KeyMate.App", "src\KeyMate.App\KeyMate.App.csproj", "{31B536DA-0A35-4A01-B658-0300FFE0A4ED}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{A07B2AF2-9889-4972-B4A6-40AD80CD3E8A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KeyMate.Tests", "tests\KeyMate.Tests\KeyMate.Tests.csproj", "{BFC31E2D-7709-4C21-8A9A-542FF1367862}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KeyMate.Integration", "tests\KeyMate.Integration\KeyMate.Integration.csproj", "{CDF47E38-92C7-482F-8C84-9CB63D7D9CB2}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{90B7B758-2286-4072-BA00-9A28CCBA0D75}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{90B7B758-2286-4072-BA00-9A28CCBA0D75}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{90B7B758-2286-4072-BA00-9A28CCBA0D75}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{90B7B758-2286-4072-BA00-9A28CCBA0D75}.Release|Any CPU.Build.0 = Release|Any CPU
+		{31B536DA-0A35-4A01-B658-0300FFE0A4ED}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{31B536DA-0A35-4A01-B658-0300FFE0A4ED}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{31B536DA-0A35-4A01-B658-0300FFE0A4ED}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{31B536DA-0A35-4A01-B658-0300FFE0A4ED}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BFC31E2D-7709-4C21-8A9A-542FF1367862}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BFC31E2D-7709-4C21-8A9A-542FF1367862}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BFC31E2D-7709-4C21-8A9A-542FF1367862}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BFC31E2D-7709-4C21-8A9A-542FF1367862}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CDF47E38-92C7-482F-8C84-9CB63D7D9CB2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CDF47E38-92C7-482F-8C84-9CB63D7D9CB2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CDF47E38-92C7-482F-8C84-9CB63D7D9CB2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CDF47E38-92C7-482F-8C84-9CB63D7D9CB2}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{90B7B758-2286-4072-BA00-9A28CCBA0D75} = {D14420D6-AB0A-4DE0-87ED-231A8CF06E52}
+		{31B536DA-0A35-4A01-B658-0300FFE0A4ED} = {D14420D6-AB0A-4DE0-87ED-231A8CF06E52}
+		{BFC31E2D-7709-4C21-8A9A-542FF1367862} = {A07B2AF2-9889-4972-B4A6-40AD80CD3E8A}
+		{CDF47E38-92C7-482F-8C84-9CB63D7D9CB2} = {A07B2AF2-9889-4972-B4A6-40AD80CD3E8A}
+	EndGlobalSection
+EndGlobal

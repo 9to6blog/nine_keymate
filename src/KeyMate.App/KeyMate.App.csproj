@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType><TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF><UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>KeyMate</AssemblyName><RootNamespace>KeyMate</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets/keymate.ico</ApplicationIcon>
+    <Version>0.1.0</Version><Description>KeyMate · 자주 쓰는 말을, 더 빠르게.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../KeyMate.Core/KeyMate.Core.csproj" />
+    <Resource Include="Assets/keymate.ico" />
+  </ItemGroup>
+  <ItemGroup><Using Remove="System.Windows.Forms" /><Using Remove="System.Drawing" /></ItemGroup>
+</Project>
