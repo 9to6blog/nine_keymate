@@ -52,7 +52,7 @@ dotnet run --project tests/KeyMate.Integration -c Release --no-build
 dotnet run --project src/KeyMate.App -c Release --no-build
 ```
 
-통합 테스트는 Windows의 대화형 데스크톱과 Microsoft 한국어 IME가 필요합니다. 임시 테스트 창에만 키를 보내며 포커스가 달라지면 주입을 거절합니다. 테스트 동안 임시 창의 포커스를 유지하세요. 마지막에 입력 언어와 IME 상태를 복구합니다. 임시 테스트 창과 별도 프로세스의 편집창을 모두 검사합니다.
+통합 테스트는 Windows의 대화형 데스크톱과 Microsoft 한국어 IME가 필요합니다. 임시 테스트 창에만 키를 보내며 포커스가 달라지면 주입을 거절합니다. 테스트 동안 임시 창의 포커스를 유지하세요. 마지막에 입력 언어와 IME 상태를 복구합니다. 임시 테스트 창과 별도 프로세스의 편집창을 모두 검사합니다. **새 키보드 배열을 추가하지 않습니다.** 이미 US 배열이 있는 환경에서만 해당 Enter·Tab 검사를 실행하며, 없으면 두 검사를 건너뜁니다. Microsoft 입력기만으로 한/영 입력과 Space 치환을 사용할 수 있습니다. 테스트 전후에 키보드 배열 목록이 동일한지도 확인합니다.
 
 ```powershell
 # 별도 .NET 런타임 설치가 필요 없는 단일 실행 파일

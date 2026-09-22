@@ -28,11 +28,24 @@ internal static class Program
     [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
     [DllImport("user32.dll")] private static extern bool AttachThreadInput(uint from, uint to, bool attach);
     [DllImport("user32.dll")] private static extern nint GetKeyboardLayout(uint thread);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint LoadKeyboardLayout(string id, uint flags);
+    [DllImport("user32.dll")] private static extern int GetKeyboardLayoutList(int count, [Out] nint[]? layouts);
     [DllImport("user32.dll")] private static extern nint ActivateKeyboardLayout(nint layout, uint flags);
     [DllImport("user32.dll")] private static extern uint MapVirtualKey(uint code, uint mapType);
     private static readonly List<string> report = [];
     private static nint testWindow;
+    private static nint[] LoadedLayouts()
+    {
+        var layouts = new nint[GetKeyboardLayoutList(0, null)];
+        var count = GetKeyboardLayoutList(layouts.Length, layouts);
+        return layouts.Take(count).ToArray();
+    }
+    private static bool UseExistingLayout(ushort language)
+    {
+        var layout = LoadedLayouts().FirstOrDefault(hkl => ((long)hkl & 0xffff) == language);
+        if (layout == 0) return false;
+        ActivateKeyboardLayout(layout, 0);
+        return GetKeyboardLayout(0) == layout;
+    }
     private static void Tap(ushort key)
     {
         if (GetForegroundWindow() != testWindow) throw new Exception($"Test window lost foreground ({GetForegroundWindow():X} vs {testWindow:X}); input was not sent");
@@ -55,8 +68,6 @@ internal static class Program
         {
             window.Loaded += (_, _) =>
             {
-                InputLanguageManager.Current.CurrentInputLanguage = System.Globalization.CultureInfo.GetCultureInfo("en-US");
-                ActivateKeyboardLayout(LoadKeyboardLayout("00000409", 0), 0);
                 box.Text = "ㅈㅅ"; box.CaretIndex = 2; box.Focus();
             };
             app.Run(window); return 0;
@@ -64,11 +75,13 @@ internal static class Program
         window.Loaded += async (_, _) =>
         {
             testWindow = new WindowInteropHelper(window).Handle;
-            var original = InputLanguageManager.Current.CurrentInputLanguage;
+            var originalLayout = GetKeyboardLayout(0);
+            var originalLayouts = LoadedLayouts().OrderBy(hkl => (long)hkl).ToArray();
             var originalImeState = InputMethod.Current.ImeState;
             var originalConversion = InputMethod.Current.ImeConversionMode;
-            InputLanguageManager.Current.CurrentInputLanguage = System.Globalization.CultureInfo.GetCultureInfo("en-US");
-            ActivateKeyboardLayout(LoadKeyboardLayout("00000409", 0), 0);
+            // Never load a new layout: on Windows 8+ that can leave a US keyboard
+            // in the user's session even after this test process exits.
+            if (!UseExistingLayout(0x0409)) InputMethod.SetPreferredImeState(box, InputMethodState.Off);
             using var engine = new ExpansionEngine(true);
             engine.Status += message => Console.WriteLine("DIAGNOSTIC " + message);
             var entries = new[] { new Snippet { Shortcut = "ㅈㅅ", Expansion = "안녕하세요." }, new Snippet { Shortcut = "안녕", Expansion = "반갑습니다." }, new Snippet { Shortcut = "/sig", Expansion = "감사합니다.\n홍길동 드림" }, new Snippet { Shortcut = "!x", Expansion = "expanded" } };
@@ -99,18 +112,22 @@ internal static class Program
             await Check("Read-only input is skipped", async () => { await Reset("!x "); box.IsReadOnly = true; Tap(32); await Task.Delay(350); return box.Text == "!x "; });
             await Check("App exclusion passes unchanged", async () => { engine.Configure(entries, settings with { ExcludedApps = System.Diagnostics.Process.GetCurrentProcess().ProcessName }); await Reset("!x"); Tap(32); await Task.Delay(350); var ok = box.Text == "!x "; engine.Configure(entries, settings); return ok; });
             await Check("Disabled snippet passes unchanged", async () => { engine.Configure(entries.Select(x => x with { Enabled = false }), settings); await Reset("!x"); Tap(32); await Task.Delay(350); var ok = box.Text == "!x "; engine.Configure(entries, settings); return ok; });
-            // Switch only this temporary test window's input language. Restore it afterwards.
+            // Use only layouts that were already installed; skip unavailable coverage.
             try
             {
-                InputLanguageManager.Current.CurrentInputLanguage = System.Globalization.CultureInfo.GetCultureInfo("en-US");
-                ActivateKeyboardLayout(LoadKeyboardLayout("00000409", 0), 0);
-                Console.WriteLine("LAYOUT English " + GetKeyboardLayout(0).ToString("X"));
-                await Check("Enter expands and consumes submit key", async () => { await Reset("!x"); Tap(13); await Task.Delay(400); return box.Text == "expanded"; });
-                await Check("Tab expands and keeps focus", async () => { await Reset("!x"); Tap(9); await Task.Delay(400); return box.Text == "expanded" && box.IsKeyboardFocused; });
+                if (UseExistingLayout(0x0409))
+                {
+                    await Check("Enter expands and consumes submit key", async () => { await Reset("!x"); Tap(13); await Task.Delay(400); return box.Text == "expanded"; });
+                    await Check("Tab expands and keeps focus", async () => { await Reset("!x"); Tap(9); await Task.Delay(400); return box.Text == "expanded" && box.IsKeyboardFocused; });
+                }
+                else
+                {
+                    report.Add("SKIP Enter expansion: no existing US keyboard (not added)");
+                    report.Add("SKIP Tab expansion: no existing US keyboard (not added)");
+                }
                 await Check("Unmatched Enter is replayed once", async () => { await Reset("no-match"); Tap(13); await Task.Delay(400); return box.Text.Replace("\r\n", "\n") == "no-match\n"; });
                 await Check("Unmatched Tab moves focus", async () => { await Reset("no-match"); Tap(9); await Task.Delay(400); return password.IsKeyboardFocused; });
-                InputLanguageManager.Current.CurrentInputLanguage = System.Globalization.CultureInfo.GetCultureInfo("ko-KR");
-                ActivateKeyboardLayout(LoadKeyboardLayout("00000412", 0), 0);
+                if (!UseExistingLayout(0x0412)) throw new InvalidOperationException("The Korean IME must already be available; this test does not install keyboards.");
                 var profileManager = (IProfileManager)Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("33c53a50-f456-4884-b049-85fd643ecfed"))!)!;
                 var hr = profileManager.ActivateProfile(1, 0x412, new Guid("a028ae76-01b1-46c2-99c4-acd9858ae02f"), new Guid("b5fe1f02-d5f2-4445-9c03-c568f23c99a1"), 0, 0);
                 Console.WriteLine("TSF activation " + hr.ToString("X"));
@@ -136,7 +153,9 @@ internal static class Program
             catch (Exception ex) { report.Add("FAIL Input language setup: " + ex.Message); failed++; }
             finally
             {
-                InputLanguageManager.Current.CurrentInputLanguage = original;
+                InputMethod.SetPreferredImeState(box, originalImeState);
+                InputMethod.SetPreferredImeConversionMode(box, originalConversion);
+                ActivateKeyboardLayout(originalLayout, 0);
                 InputMethod.Current.ImeState = originalImeState; InputMethod.Current.ImeConversionMode = originalConversion;
             }
             using (var child = Process.Start(new ProcessStartInfo("dotnet")
@@ -173,6 +192,7 @@ internal static class Program
                 catch (Exception ex) { report.Add("FAIL External input host: " + ex.Message); failed++; }
                 finally { child.CloseMainWindow(); if (!child.WaitForExit(2000)) child.Kill(); testWindow = new WindowInteropHelper(window).Handle; }
             }
+            await Check("Installed keyboard layouts remain unchanged", () => Task.FromResult(originalLayouts.SequenceEqual(LoadedLayouts().OrderBy(hkl => (long)hkl))));
             var path = args.FirstOrDefault() ?? Path.Combine(AppContext.BaseDirectory, "integration-results.txt");
             File.WriteAllLines(path, report); app.Shutdown(failed == 0 ? 0 : 1);
         };
