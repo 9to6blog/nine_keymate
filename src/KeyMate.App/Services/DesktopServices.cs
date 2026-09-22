@@ -49,7 +49,7 @@ internal sealed class TrayService : IDisposable
         var pause = new Forms.ToolStripMenuItem("일시 정지") { CheckOnClick = true };
         pause.CheckedChanged += (_, _) => { engine.Paused = pause.Checked; window.UpdateStatus(); icon.Text = pause.Checked ? "KeyMate · 일시 정지" : "KeyMate · 자동 치환 실행 중"; };
         menu.Items.Add(pause); menu.Items.Add(new Forms.ToolStripSeparator());
-        menu.Items.Add("종료", null, (_, _) => App.Current.Shutdown());
+        menu.Items.Add("종료", null, (_, _) => App.Current.Quit());
         icon.ContextMenuStrip = menu; icon.DoubleClick += (_, _) => App.Current.ShowMain();
     }
     public void Dispose() { icon.Visible = false; icon.ContextMenuStrip?.Dispose(); icon.Icon?.Dispose(); icon.Dispose(); }

@@ -9,7 +9,6 @@
     <SolidColorBrush x:Key="AccentBrush" Color="#1667F9"/>
     <SolidColorBrush x:Key="SoftAccentBrush" Color="#E5EFFF"/>
     <Style TargetType="Window"><Setter Property="FontFamily" Value="Segoe UI, Malgun Gothic"/><Setter Property="FontSize" Value="13"/><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="Background" Value="{DynamicResource CanvasBrush}"/></Style>
-    <Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/></Style>
     <Style TargetType="Button">
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
       <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Padding" Value="16,10"/>

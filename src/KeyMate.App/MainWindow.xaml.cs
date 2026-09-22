@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Input;
 using KeyMate.Core;
 using Microsoft.Win32;
 
@@ -105,8 +106,9 @@ public partial class MainWindow : Window
         if (MessageBox.Show(this, "같은 단축어는 백업 내용으로 갱신됩니다. 가져올까요?", "백업 가져오기", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
         Run(() => { var count = App.Current.Repository.Import(dialog.FileName); Reload(); SetStatus($"{count}개 항목을 가져왔습니다."); });
     }
-    private void Playground_Changed(object sender, TextChangedEventArgs e)
+    private void Playground_KeyUp(object sender, KeyEventArgs e)
     {
+        if (e.Key != Key.Space && e.ImeProcessedKey != Key.Space) return;
         if (practicing || loading || !App.Current.Settings.Enabled || !App.Current.Settings.Space || App.Current.Engine.Paused) return;
         var caret = Playground.CaretIndex; var text = Playground.Text;
         if (caret == 0 || text[caret - 1] != ' ') return;
@@ -124,6 +126,7 @@ public partial class MainWindow : Window
     }
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
+        if (App.Current.Exiting) return;
         SaveSettings();
         // Explicit Shutdown must still terminate the app; normal Close only hides it.
         if (System.Windows.Threading.Dispatcher.CurrentDispatcher.HasShutdownStarted) return;

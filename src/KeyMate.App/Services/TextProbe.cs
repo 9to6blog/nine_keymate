@@ -30,7 +30,11 @@ internal static class TextProbe
         var range = selection[0].Clone();
         range.MoveEndpointByUnit(TextPatternRangeEndpoint.Start, TextUnit.Character, -(Rules.MaxShortcutLength + 3));
         if (range.GetAttributeValue(TextPattern.IsReadOnlyAttribute) is true) return null;
-        var before = range.GetText(Rules.MaxShortcutLength + 8);
+        // Request one extra character and reject truncation. A provider can use larger
+        // text units, and a grapheme can contain multiple UTF-16 code units.
+        const int readLimit = 512;
+        var before = range.GetText(readLimit + 1);
+        if (before.Length > readLimit) return null;
         if (trigger == 0x20)
         {
             if (!before.EndsWith(' ')) return null;
@@ -49,7 +53,8 @@ internal static class TextProbe
         var again = pattern.GetSelection();
         if (again.Length != 1 || again[0].CompareEndpoints(TextPatternRangeEndpoint.Start, selection[0], TextPatternRangeEndpoint.Start) != 0 ||
             again[0].CompareEndpoints(TextPatternRangeEndpoint.End, selection[0], TextPatternRangeEndpoint.End) != 0 ||
-            range.GetText(Rules.MaxShortcutLength + 8) != before + (trigger == 0x20 ? " " : "") || !valid()) return null;
+            range.GetText(readLimit + 1) != before + (trigger == 0x20 ? " " : "") ||
+            !element.Current.HasKeyboardFocus || !valid()) return null;
         return new(match, before, match.Shortcut.Length + (trigger == 0x20 ? 1 : 0),
             Rules.Expand(match, DateTime.Now) + (trigger == 0x20 ? " " : ""));
     }

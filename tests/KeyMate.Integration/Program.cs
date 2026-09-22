@@ -4,11 +4,18 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Automation;
+using System.Diagnostics;
 using KeyMate.Core;
 using KeyMate.Services;
 
 internal static class Program
 {
+    [ComImport, Guid("71c6e74c-0f28-11d8-a82a-00065b84435c"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IProfileManager
+    {
+        [PreserveSig] int ActivateProfile(uint type, ushort language, in Guid clsid, in Guid profile, nint layout, uint flags);
+    }
     private const uint Marker = 0x4B4D5453;
     [StructLayout(LayoutKind.Sequential)] private struct Input { public uint Type; public Union Data; }
     [StructLayout(LayoutKind.Explicit)] private struct Union { [FieldOffset(0)] public Kbd Key; [FieldOffset(0)] public Mouse Mouse; }
@@ -16,36 +23,64 @@ internal static class Program
     [StructLayout(LayoutKind.Sequential)] private struct Mouse { public int X, Y; public uint Data, Flags, Time; public nuint Extra; }
     [DllImport("user32.dll")] private static extern uint SendInput(uint n, Input[] input, int size);
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(nint hwnd);
+    [DllImport("user32.dll")] private static extern nint GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(nint hwnd, out uint pid);
+    [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")] private static extern bool AttachThreadInput(uint from, uint to, bool attach);
     [DllImport("user32.dll")] private static extern nint GetKeyboardLayout(uint thread);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint LoadKeyboardLayout(string id, uint flags);
     [DllImport("user32.dll")] private static extern nint ActivateKeyboardLayout(nint layout, uint flags);
     [DllImport("user32.dll")] private static extern uint MapVirtualKey(uint code, uint mapType);
     private static readonly List<string> report = [];
+    private static nint testWindow;
     private static void Tap(ushort key)
     {
+        if (GetForegroundWindow() != testWindow) throw new Exception($"Test window lost foreground ({GetForegroundWindow():X} vs {testWindow:X}); input was not sent");
         var scan = (ushort)MapVirtualKey(key, 0);
         Input[] keys = [new() { Type = 1, Data = new() { Key = new() { Vk = key, Scan = scan, Extra = Marker } } }, new() { Type = 1, Data = new() { Key = new() { Vk = key, Scan = scan, Flags = 2, Extra = Marker } } }];
         if (SendInput(2, keys, Marshal.SizeOf<Input>()) != 2) throw new Exception("SendInput failed");
     }
     [STAThread] private static int Main(string[] args)
     {
+        var originalForeground = GetForegroundWindow();
         var app = new System.Windows.Application();
         var box = new TextBox { AcceptsReturn = true, MinHeight = 150, FontSize = 24, Margin = new Thickness(20) };
+        AutomationProperties.SetAutomationId(box, "ExternalInput");
         var password = new PasswordBox { Margin = new Thickness(20) };
         var other = new TextBox { Margin = new Thickness(20) };
         var panel = new StackPanel(); panel.Children.Add(new TextBlock { Text = "KeyMate integration test · temporary isolated input" }); panel.Children.Add(box); panel.Children.Add(password); panel.Children.Add(other);
-        var window = new Window { Title = "KeyMate integration test", Content = panel, Width = 700, Height = 410, WindowStartupLocation = WindowStartupLocation.CenterScreen };
+        var window = new Window { Title = "KeyMate integration test", Content = panel, Width = 700, Height = 410, WindowStartupLocation = WindowStartupLocation.CenterScreen, Topmost = true };
         var failed = 0;
+        if (args.Contains("--host"))
+        {
+            window.Loaded += (_, _) =>
+            {
+                InputLanguageManager.Current.CurrentInputLanguage = System.Globalization.CultureInfo.GetCultureInfo("en-US");
+                ActivateKeyboardLayout(LoadKeyboardLayout("00000409", 0), 0);
+                box.Text = "ㅈㅅ"; box.CaretIndex = 2; box.Focus();
+            };
+            app.Run(window); return 0;
+        }
         window.Loaded += async (_, _) =>
         {
+            testWindow = new WindowInteropHelper(window).Handle;
+            var original = InputLanguageManager.Current.CurrentInputLanguage;
+            var originalImeState = InputMethod.Current.ImeState;
+            var originalConversion = InputMethod.Current.ImeConversionMode;
+            InputLanguageManager.Current.CurrentInputLanguage = System.Globalization.CultureInfo.GetCultureInfo("en-US");
+            ActivateKeyboardLayout(LoadKeyboardLayout("00000409", 0), 0);
             using var engine = new ExpansionEngine(true);
             engine.Status += message => Console.WriteLine("DIAGNOSTIC " + message);
-            var entries = new[] { new Snippet { Shortcut = "ㅈㅅ", Expansion = "안녕하세요." }, new Snippet { Shortcut = "/sig", Expansion = "감사합니다.\n홍길동 드림" }, new Snippet { Shortcut = "!x", Expansion = "expanded" } };
+            var entries = new[] { new Snippet { Shortcut = "ㅈㅅ", Expansion = "안녕하세요." }, new Snippet { Shortcut = "안녕", Expansion = "반갑습니다." }, new Snippet { Shortcut = "/sig", Expansion = "감사합니다.\n홍길동 드림" }, new Snippet { Shortcut = "!x", Expansion = "expanded" } };
             var settings = new Settings { ExcludedApps = "", Enter = true, Tab = true };
             engine.Configure(entries, settings);
             async Task Reset(string text)
             {
-                SetForegroundWindow(new WindowInteropHelper(window).Handle); window.Activate(); box.Focus();
+                var foregroundThread = GetWindowThreadProcessId(GetForegroundWindow(), out _);
+                var ownThread = GetCurrentThreadId();
+                var attached = foregroundThread != 0 && foregroundThread != ownThread && AttachThreadInput(ownThread, foregroundThread, true);
+                try { SetForegroundWindow(testWindow); window.Activate(); box.Focus(); }
+                finally { if (attached) AttachThreadInput(ownThread, foregroundThread, false); }
                 box.IsReadOnly = false; box.Text = text; box.CaretIndex = text.Length; await Task.Delay(300);
             }
             async Task Check(string name, Func<Task<bool>> test)
@@ -65,7 +100,6 @@ internal static class Program
             await Check("App exclusion passes unchanged", async () => { engine.Configure(entries, settings with { ExcludedApps = System.Diagnostics.Process.GetCurrentProcess().ProcessName }); await Reset("!x"); Tap(32); await Task.Delay(350); var ok = box.Text == "!x "; engine.Configure(entries, settings); return ok; });
             await Check("Disabled snippet passes unchanged", async () => { engine.Configure(entries.Select(x => x with { Enabled = false }), settings); await Reset("!x"); Tap(32); await Task.Delay(350); var ok = box.Text == "!x "; engine.Configure(entries, settings); return ok; });
             // Switch only this temporary test window's input language. Restore it afterwards.
-            var original = InputLanguageManager.Current.CurrentInputLanguage;
             try
             {
                 InputLanguageManager.Current.CurrentInputLanguage = System.Globalization.CultureInfo.GetCultureInfo("en-US");
@@ -77,20 +111,71 @@ internal static class Program
                 await Check("Unmatched Tab moves focus", async () => { await Reset("no-match"); Tap(9); await Task.Delay(400); return password.IsKeyboardFocused; });
                 InputLanguageManager.Current.CurrentInputLanguage = System.Globalization.CultureInfo.GetCultureInfo("ko-KR");
                 ActivateKeyboardLayout(LoadKeyboardLayout("00000412", 0), 0);
+                var profileManager = (IProfileManager)Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("33c53a50-f456-4884-b049-85fd643ecfed"))!)!;
+                var hr = profileManager.ActivateProfile(1, 0x412, new Guid("a028ae76-01b1-46c2-99c4-acd9858ae02f"), new Guid("b5fe1f02-d5f2-4445-9c03-c568f23c99a1"), 0, 0);
+                Console.WriteLine("TSF activation " + hr.ToString("X"));
+                Marshal.ReleaseComObject(profileManager);
                 Console.WriteLine("LAYOUT Korean " + GetKeyboardLayout(0).ToString("X"));
                 await Check("Korean IME physical w,t + Space", async () =>
                 {
                     await Reset(""); InputMethod.SetPreferredImeState(box, InputMethodState.On); InputMethod.Current.ImeState = InputMethodState.On;
+                    InputMethod.SetPreferredImeConversionMode(box, ImeConversionModeValues.Native); InputMethod.Current.ImeConversionMode = ImeConversionModeValues.Native;
                     Console.WriteLine("IME " + InputMethod.Current.ImeState + " " + InputLanguageManager.Current.CurrentInputLanguage);
                     await Task.Delay(300); Tap(0x57); await Task.Delay(100); Tap(0x54); await Task.Delay(100); Tap(32); await Task.Delay(650);
                     return box.Text == "안녕하세요. ";
                 });
+                await Check("Korean IME composed syllables + Space", async () =>
+                {
+                    await Reset("");
+                    foreach (var key in new ushort[] { 0x44, 0x4B, 0x53, 0x53, 0x55, 0x44 }) { Tap(key); await Task.Delay(75); }
+                    Tap(32); await Task.Delay(600); return box.Text == "반갑습니다. ";
+                });
+                await Check("Korean Enter is passed through without expansion", async () =>
+                { await Reset("ㅈㅅ"); Tap(13); await Task.Delay(400); return box.Text.Replace("\r\n", "\n") == "ㅈㅅ\n"; });
             }
             catch (Exception ex) { report.Add("FAIL Input language setup: " + ex.Message); failed++; }
-            finally { InputLanguageManager.Current.CurrentInputLanguage = original; }
+            finally
+            {
+                InputLanguageManager.Current.CurrentInputLanguage = original;
+                InputMethod.Current.ImeState = originalImeState; InputMethod.Current.ImeConversionMode = originalConversion;
+            }
+            using (var child = Process.Start(new ProcessStartInfo("dotnet")
+            {
+                ArgumentList = { typeof(Program).Assembly.Location, "--host" }, UseShellExecute = false, CreateNoWindow = true
+            })!)
+            {
+                try
+                {
+                    for (var i = 0; i < 30 && child.MainWindowHandle == 0; i++) { await Task.Delay(100); child.Refresh(); }
+                    if (child.MainWindowHandle == 0) throw new Exception("External input host did not start");
+                    testWindow = child.MainWindowHandle;
+                    var foreignThread = GetWindowThreadProcessId(GetForegroundWindow(), out _);
+                    var ownThread = GetCurrentThreadId();
+                    var attached = foreignThread != ownThread && AttachThreadInput(ownThread, foreignThread, true);
+                    try { SetForegroundWindow(testWindow); } finally { if (attached) AttachThreadInput(ownThread, foreignThread, false); }
+                    async Task<string> ReadExternal() => await Task.Run(() =>
+                    {
+                        var input = AutomationElement.FromHandle(testWindow).FindFirst(TreeScope.Descendants, new PropertyCondition(AutomationElement.AutomationIdProperty, "ExternalInput"));
+                        return ((ValuePattern)input.GetCurrentPattern(ValuePattern.Pattern)).Current.Value;
+                    });
+                    await Check("Cross-process Korean + Space", async () => { await Task.Delay(250); Tap(32); await Task.Delay(500); return await ReadExternal() == "안녕하세요. "; });
+                    await Check("Cross-process multiline expansion", async () =>
+                    {
+                        await Task.Run(() =>
+                        {
+                            var input = AutomationElement.FromHandle(testWindow).FindFirst(TreeScope.Descendants, new PropertyCondition(AutomationElement.AutomationIdProperty, "ExternalInput"));
+                            ((ValuePattern)input.GetCurrentPattern(ValuePattern.Pattern)).SetValue("/sig"); input.SetFocus();
+                        });
+                        Tap(0x23); await Task.Delay(100); Tap(32); await Task.Delay(500);
+                        return (await ReadExternal()).Replace("\r\n", "\n") == "감사합니다.\n홍길동 드림 ";
+                    });
+                }
+                catch (Exception ex) { report.Add("FAIL External input host: " + ex.Message); failed++; }
+                finally { child.CloseMainWindow(); if (!child.WaitForExit(2000)) child.Kill(); testWindow = new WindowInteropHelper(window).Handle; }
+            }
             var path = args.FirstOrDefault() ?? Path.Combine(AppContext.BaseDirectory, "integration-results.txt");
             File.WriteAllLines(path, report); app.Shutdown(failed == 0 ? 0 : 1);
         };
-        app.Run(window); return failed == 0 ? 0 : 1;
+        app.Run(window); SetForegroundWindow(originalForeground); return failed == 0 ? 0 : 1;
     }
 }

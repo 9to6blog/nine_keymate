@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json.Serialization;
 
 namespace KeyMate.Core;
 
@@ -12,8 +13,8 @@ public sealed record Snippet
     public bool Enabled { get; init; } = true;
     public bool CaseSensitive { get; init; }
     public bool WordBoundary { get; init; } = true;
-    public string Preview => Expansion.Replace("\r", "").Replace("\n", "  ↵  ");
-    public string Category => string.IsNullOrWhiteSpace(Description) ? "일반" : Description;
+    [JsonIgnore] public string Preview => Expansion.Replace("\r", "").Replace("\n", "  ↵  ");
+    [JsonIgnore] public string Category => string.IsNullOrWhiteSpace(Description) ? "일반" : Description;
 }
 
 public sealed record Settings
@@ -37,13 +38,15 @@ public static class Rules
     {
         if (string.IsNullOrWhiteSpace(s.Shortcut) || s.Shortcut.Length > MaxShortcutLength || s.Shortcut.Any(char.IsWhiteSpace))
             return "단축어는 공백 없이 1~64자로 입력해 주세요.";
-        if (s.Shortcut.Any(c => char.IsControl(c) || char.IsSurrogate(c)))
-            return "단축어에는 제어 문자와 이모지를 사용할 수 없습니다.";
+        if (!s.Shortcut.IsNormalized(NormalizationForm.FormC) || s.Shortcut.Any(c => char.IsControl(c) || char.IsSurrogate(c) ||
+                CharUnicodeInfo.GetUnicodeCategory(c) is UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark or UnicodeCategory.EnclosingMark))
+            return "단축어에는 조합이 완료된 한글·영문 등을 사용해 주세요. 이모지·결합 문자는 지원하지 않습니다.";
         if (string.IsNullOrWhiteSpace(s.Expansion) || s.Expansion.Length > MaxExpansionLength)
             return "대치 문구는 1~4,000자로 입력해 주세요.";
-        if (s.Expansion.Any(c => char.IsControl(c) && c is not ('\r' or '\n' or '\t')))
+        if (s.Expansion.Any(c => char.IsControl(c) && c is not ('\r' or '\n')))
             return "대치 문구에 지원하지 않는 제어 문자가 있습니다.";
         if (s.Description.Length > 80) return "설명은 80자 이내로 입력해 주세요.";
+        if (s.Description.Any(char.IsControl)) return "설명은 줄바꿈 없이 입력해 주세요.";
         if (existing.Any(e => e.Id != s.Id && string.Equals(e.Shortcut, s.Shortcut,
                 e.CaseSensitive && s.CaseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase)))
             return "이미 사용 중인 단축어입니다.";
